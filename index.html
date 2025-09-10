@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Story Reader - Children's Book Reader</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka+One:wght@400&family=Nunito:wght@400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 class="title">📚 Story Reader</h1>
+            <p class="subtitle">Take a photo and I'll read your book to you!</p>
+        </header>
+
+        <main class="main-content">
+            <div class="camera-section" id="cameraSection">
+                <div class="camera-placeholder">
+                    <div class="camera-icon">📷</div>
+                    <p>Tap to take a photo of your book</p>
+                    <button class="camera-btn" id="cameraBtn">📸 Take Photo</button>
+                </div>
+                
+                <video id="video" class="camera-video" style="display: none;" autoplay playsinline></video>
+                <canvas id="canvas" style="display: none;"></canvas>
+                
+                <div class="captured-image" id="capturedImageSection" style="display: none;">
+                    <img id="capturedImage" src="" alt="Captured book page">
+                    <div class="image-actions">
+                        <button class="btn btn-secondary" id="retakeBtn">🔄 Retake</button>
+                        <button class="btn btn-primary" id="readBtn">✨ Read to me!</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-section" id="textSection" style="display: none;">
+                <div class="extracted-text">
+                    <h3>📖 Story Text:</h3>
+                    <div class="text-content" id="extractedText"></div>
+                </div>
+                
+                <div class="audio-controls">
+                    <button class="btn btn-primary" id="playBtn">🎵 Play Story</button>
+                    <button class="btn btn-secondary" id="pauseBtn" style="display: none;">⏸️ Pause</button>
+                    <button class="btn btn-secondary" id="newPhotoBtn">📷 New Photo</button>
+                </div>
+            </div>
+
+            <div class="loading" id="loading" style="display: none;">
+                <div class="loading-spinner"></div>
+                <p class="loading-text">Reading your book... ✨</p>
+            </div>
+        </main>
+    </div>
+
+    <input type="file" id="fileInput" accept="image/*" capture="environment" style="display: none;">
+    <audio id="audioPlayer" style="display: none;"></audio>
+
+    <script src="script.js"></script>
+</body>
+</html>
