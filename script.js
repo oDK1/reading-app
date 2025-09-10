@@ -42,11 +42,23 @@ class StoryReader {
             console.log('Starting camera, isMobile:', this.isMobile());
             console.log('Location protocol:', window.location.protocol);
             
-            // Always try file input first for better compatibility
-            this.fileInput.click();
+            if (this.isMobile() || !navigator.mediaDevices?.getUserMedia) {
+                // On mobile or if getUserMedia not available, use file input with camera
+                this.fileInput.click();
+            } else {
+                // On desktop, try to access camera
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: 'environment' } 
+                });
+                this.video.srcObject = stream;
+                this.video.style.display = 'block';
+                this.cameraBtn.textContent = '📸 Capture';
+                this.cameraBtn.onclick = () => this.capturePhoto();
+            }
         } catch (error) {
             console.error('Camera access error:', error);
-            alert('Unable to access camera. Please try refreshing the page.');
+            console.log('Falling back to file input');
+            this.fileInput.click();
         }
     }
 
