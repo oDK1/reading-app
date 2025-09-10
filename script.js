@@ -21,6 +21,10 @@ class StoryReader {
         this.newPhotoBtn = document.getElementById('newPhotoBtn');
         this.loading = document.getElementById('loading');
         this.audioPlayer = document.getElementById('audioPlayer');
+        
+        // Debug logging
+        console.log('Camera button found:', !!this.cameraBtn);
+        console.log('File input found:', !!this.fileInput);
     }
 
     bindEvents() {
@@ -35,20 +39,14 @@ class StoryReader {
 
     async startCamera() {
         try {
-            if (this.isMobile()) {
-                this.fileInput.click();
-            } else {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } 
-                });
-                this.video.srcObject = stream;
-                this.video.style.display = 'block';
-                this.cameraBtn.textContent = '📸 Capture';
-                this.cameraBtn.onclick = () => this.capturePhoto();
-            }
+            console.log('Starting camera, isMobile:', this.isMobile());
+            console.log('Location protocol:', window.location.protocol);
+            
+            // Always try file input first for better compatibility
+            this.fileInput.click();
         } catch (error) {
             console.error('Camera access error:', error);
-            this.fileInput.click();
+            alert('Unable to access camera. Please try refreshing the page.');
         }
     }
 
