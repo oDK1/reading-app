@@ -79,19 +79,39 @@ class StoryReader {
 
     handleFileSelect(event) {
         const file = event.target.files[0];
+        console.log('File selected:', file ? file.name : 'none', file ? file.size : 0);
+        
         if (file) {
+            // Check if it's an image
+            if (!file.type.startsWith('image/')) {
+                alert('Please select an image file');
+                return;
+            }
+            
             const reader = new FileReader();
             reader.onload = (e) => {
+                console.log('File loaded, data URL length:', e.target.result.length);
                 this.displayCapturedImage(e.target.result);
             };
+            reader.onerror = (e) => {
+                console.error('FileReader error:', e);
+                alert('Error reading the image file. Please try again.');
+            };
             reader.readAsDataURL(file);
+        } else {
+            console.log('No file selected');
         }
     }
 
     displayCapturedImage(dataURL) {
+        console.log('Setting captured image src, processing...');
         this.capturedImage.src = dataURL;
-        // Skip showing the image, process immediately
-        this.processImage();
+        
+        // Add a small delay to ensure image is loaded, especially on mobile
+        setTimeout(() => {
+            console.log('Starting image processing...');
+            this.processImage();
+        }, 100);
     }
 
     stopCamera() {
@@ -111,12 +131,18 @@ class StoryReader {
     }
 
     async processImage() {
+        console.log('ProcessImage called');
         this.showLoading();
         
         try {
+            console.log('Extracting text from image...');
             const text = await this.extractTextFromImage();
-            if (text) {
+            console.log('Extracted text:', text ? text.substring(0, 50) + '...' : 'none');
+            
+            if (text && text.trim().length > 0) {
+                console.log('Generating audio...');
                 await this.generateAudio(text);
+                console.log('Auto-playing audio...');
                 this.autoPlayAudio();
             } else {
                 throw new Error('No text found in image');
@@ -124,6 +150,8 @@ class StoryReader {
         } catch (error) {
             console.error('Processing error:', error);
             alert('Sorry, I couldn\'t read the text from your book. Please try taking another photo!');
+            // Reset to camera view on error
+            this.resetToCamera();
         } finally {
             this.hideLoading();
         }
@@ -131,9 +159,15 @@ class StoryReader {
 
     async extractTextFromImage() {
         const imageData = this.capturedImage.src;
+        console.log('Image data length:', imageData.length);
+        
+        if (!imageData || !imageData.includes(',')) {
+            throw new Error('Invalid image data');
+        }
         
         // Remove data URL prefix to get base64 data
         const base64Data = imageData.split(',')[1];
+        console.log('Base64 data length:', base64Data.length);
         
         const response = await fetch('/api/extract-text', {
             method: 'POST',
@@ -145,11 +179,16 @@ class StoryReader {
             })
         });
 
+        console.log('API response status:', response.status);
+        
         if (!response.ok) {
-            throw new Error('Failed to extract text');
+            const errorText = await response.text();
+            console.error('API error response:', errorText);
+            throw new Error(`Failed to extract text: ${response.status}`);
         }
 
         const result = await response.json();
+        console.log('API result:', result);
         return result.text;
     }
 
