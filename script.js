@@ -234,10 +234,22 @@ class StoryReader {
             // Hide the text content but show the controls
             this.extractedText.style.display = 'none';
             
-            // Auto-play the audio
-            this.audioPlayer.play();
-            this.playBtn.style.display = 'none';
-            this.pauseBtn.style.display = 'inline-block';
+            // Try to auto-play, but handle mobile restrictions
+            this.audioPlayer.play().catch((error) => {
+                console.log('Auto-play blocked, showing play button:', error.message);
+                // Show play button since auto-play was blocked
+                this.playBtn.style.display = 'inline-block';
+                this.pauseBtn.style.display = 'none';
+                
+                // Show a message to the user
+                alert('Audio is ready! Tap the play button to listen.');
+            });
+            
+            // If auto-play succeeds, hide play button
+            this.audioPlayer.onplay = () => {
+                this.playBtn.style.display = 'none';
+                this.pauseBtn.style.display = 'inline-block';
+            };
             
             this.audioPlayer.onended = () => {
                 this.playBtn.style.display = 'inline-block';
