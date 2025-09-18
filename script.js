@@ -580,24 +580,51 @@ class StoryReader {
 
     async extractTextFromImage() {
         const imageData = this.capturedImage.src;
-        console.log('Image data length:', imageData.length);
-        console.log('Image complete:', this.capturedImage.complete);
-        console.log('Image naturalWidth:', this.capturedImage.naturalWidth);
+        this.logFlow('extract_text_from_image_called', {
+            originalImageLength: imageData.length,
+            imageComplete: this.capturedImage.complete,
+            naturalWidth: this.capturedImage.naturalWidth,
+            naturalHeight: this.capturedImage.naturalHeight
+        });
         
         if (!imageData || !imageData.includes(',')) {
-            console.error('Invalid image data - missing or malformed data URL');
+            this.logFlow('invalid_image_data_error');
             throw new Error('Invalid image data');
         }
         
         // Additional validation for mobile
         if (!this.capturedImage.complete || this.capturedImage.naturalWidth === 0) {
-            console.error('Image not fully loaded');
+            this.logFlow('image_not_fully_loaded_error');
             throw new Error('Image not fully loaded');
         }
         
+        // Check if image needs compression (mobile photos are often too large)
+        let processedImageData = imageData;
+        const imageSizeMB = imageData.length / 1024 / 1024;
+        
+        this.logFlow('checking_image_size', {
+            imageSizeMB: imageSizeMB.toFixed(2),
+            needsCompression: imageSizeMB > 3
+        });
+        
+        if (imageSizeMB > 3) { // If larger than 3MB, compress it
+            this.logFlow('compressing_large_image');
+            processedImageData = await this.compressImage(imageData, 0.7); // 70% quality
+            
+            const compressedSizeMB = processedImageData.length / 1024 / 1024;
+            this.logFlow('image_compressed', {
+                originalSizeMB: imageSizeMB.toFixed(2),
+                compressedSizeMB: compressedSizeMB.toFixed(2),
+                compressionRatio: (compressedSizeMB / imageSizeMB * 100).toFixed(1) + '%'
+            });
+        }
+        
         // Remove data URL prefix to get base64 data
-        const base64Data = imageData.split(',')[1];
-        console.log('Base64 data length:', base64Data.length);
+        const base64Data = processedImageData.split(',')[1];
+        this.logFlow('prepared_base64_data', {
+            base64Length: base64Data.length,
+            finalSizeMB: (processedImageData.length / 1024 / 1024).toFixed(2)
+        });
         
         const response = await fetch('/api/extract-text', {
             method: 'POST',
@@ -619,7 +646,55 @@ class StoryReader {
 
         const result = await response.json();
         console.log('API result:', result);
+        this.logFlow('text_extraction_api_success', {
+            extractedTextLength: result.text ? result.text.length : 0
+        });
+        
         return result.text;
+    }
+    
+    async compressImage(dataURL, quality = 0.7, maxWidth = 1920, maxHeight = 1920) {
+        return new Promise((resolve) => {
+            this.logFlow('starting_image_compression', {
+                quality,
+                maxWidth,
+                maxHeight,
+                originalSize: (dataURL.length / 1024 / 1024).toFixed(2) + 'MB'
+            });
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = () => {
+                // Calculate new dimensions while maintaining aspect ratio
+                let { width, height } = img;
+                
+                if (width > maxWidth || height > maxHeight) {
+                    const ratio = Math.min(maxWidth / width, maxHeight / height);
+                    width *= ratio;
+                    height *= ratio;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                
+                // Draw and compress
+                ctx.drawImage(img, 0, 0, width, height);
+                const compressedDataURL = canvas.toDataURL('image/jpeg', quality);
+                
+                this.logFlow('image_compression_completed', {
+                    originalDimensions: `${img.width}x${img.height}`,
+                    newDimensions: `${width}x${height}`,
+                    originalSize: (dataURL.length / 1024 / 1024).toFixed(2) + 'MB',
+                    compressedSize: (compressedDataURL.length / 1024 / 1024).toFixed(2) + 'MB'
+                });
+                
+                resolve(compressedDataURL);
+            };
+            
+            img.src = dataURL;
+        });
     }
 
     displayText(text) {
