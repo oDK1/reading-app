@@ -29,7 +29,9 @@ class StoryReader {
 
     bindEvents() {
         this.cameraBtn.addEventListener('click', () => this.startCamera());
+        // Use both change and input events for better reliability
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+        this.fileInput.addEventListener('input', (e) => this.handleFileSelect(e));
         this.retakeBtn.addEventListener('click', () => this.resetToCamera());
         this.readBtn.addEventListener('click', () => this.processImage());
         this.playBtn.addEventListener('click', () => this.playAudio());
@@ -42,9 +44,15 @@ class StoryReader {
             console.log('Starting camera, isMobile:', this.isMobile());
             console.log('Location protocol:', window.location.protocol);
             
+            // Clear any previous file selection to ensure change event fires
+            this.fileInput.value = '';
+            
             if (this.isMobile() || !navigator.mediaDevices?.getUserMedia) {
                 // On mobile or if getUserMedia not available, use file input with camera
-                this.fileInput.click();
+                // Add a small delay to ensure the value clearing is processed
+                setTimeout(() => {
+                    this.fileInput.click();
+                }, 10);
             } else {
                 // On desktop, try to access camera
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -58,7 +66,11 @@ class StoryReader {
         } catch (error) {
             console.error('Camera access error:', error);
             console.log('Falling back to file input');
-            this.fileInput.click();
+            // Clear file input and add delay before clicking
+            this.fileInput.value = '';
+            setTimeout(() => {
+                this.fileInput.click();
+            }, 10);
         }
     }
 
@@ -107,6 +119,11 @@ class StoryReader {
         console.log('Setting captured image src, processing...');
         this.capturedImage.src = dataURL;
         
+        // Show the captured image section immediately
+        this.capturedImageSection.style.display = 'block';
+        this.cameraBtn.style.display = 'none';
+        this.video.style.display = 'none';
+        
         // Add a small delay to ensure image is loaded, especially on mobile
         setTimeout(() => {
             console.log('Starting image processing...');
@@ -122,14 +139,24 @@ class StoryReader {
     }
 
     resetToCamera() {
+        // Stop any ongoing audio
+        this.stopAudio();
+        
+        // Reset UI to camera state
         this.capturedImageSection.style.display = 'none';
         this.textSection.style.display = 'none';
+        this.video.style.display = 'none';
         this.cameraBtn.style.display = 'block';
         this.cameraBtn.textContent = '📸 Take Photo';
         this.cameraBtn.onclick = () => this.startCamera();
-        this.stopAudio();
+        
         // Clear the file input to ensure new photos are detected
         this.fileInput.value = '';
+        
+        // Clear any previous image data
+        this.capturedImage.src = '';
+        
+        console.log('Reset to camera view completed');
     }
 
     async processImage() {
