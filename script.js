@@ -11,6 +11,11 @@ class StoryReader {
         // Flow tracking for debugging
         this.flowStep = 'initialized';
         this.flowHistory = [];
+        
+        // Debounce mechanism to prevent rapid clicks
+        this.lastClickTime = 0;
+        this.clickDebounceMs = 1000; // 1 second debounce
+        
         this.logFlow('App initialized');
     }
 
@@ -230,6 +235,17 @@ class StoryReader {
 
     bindEvents() {
         this.cameraBtn.addEventListener('click', () => {
+            // Debounce rapid clicks to prevent conflicts
+            const now = Date.now();
+            if (now - this.lastClickTime < this.clickDebounceMs) {
+                this.logFlow('click_debounced', {
+                    timeSinceLastClick: now - this.lastClickTime,
+                    debounceMs: this.clickDebounceMs
+                });
+                return;
+            }
+            this.lastClickTime = now;
+            
             this.logFlow('take_photo_clicked');
             this.startCamera();
         });
@@ -246,6 +262,8 @@ class StoryReader {
         });
         this.pauseBtn.addEventListener('click', () => this.pauseAudio());
         this.newPhotoBtn.addEventListener('click', () => {
+            // Reset click debounce when taking new photo
+            this.lastClickTime = 0;
             this.logFlow('new_photo_clicked');
             this.resetToCamera();
         });
@@ -359,6 +377,12 @@ class StoryReader {
                 return;
             }
             
+            // Clear any pending timeouts from previous attempts
+            if (this.fileProcessingTimeout) {
+                clearTimeout(this.fileProcessingTimeout);
+                this.logFlow('cleared_previous_processing_timeout');
+            }
+            
             this.logFlow('creating_file_reader');
             const reader = new FileReader();
             
@@ -369,10 +393,20 @@ class StoryReader {
                 });
                 
                 try {
+                    // Clear the timeout since processing succeeded
+                    if (this.fileProcessingTimeout) {
+                        clearTimeout(this.fileProcessingTimeout);
+                        this.fileProcessingTimeout = null;
+                    }
+                    
                     this.displayCapturedImage(e.target.result);
                     this.processingFile = false;
                     this.logFlow('file_processing_completed');
                 } catch (error) {
+                    if (this.fileProcessingTimeout) {
+                        clearTimeout(this.fileProcessingTimeout);
+                        this.fileProcessingTimeout = null;
+                    }
                     this.logFlow('display_captured_image_error', { error: error.message, stack: error.stack });
                     console.error('Error in displayCapturedImage:', error);
                     this.processingFile = false;
@@ -380,6 +414,10 @@ class StoryReader {
             };
             
             reader.onerror = (e) => {
+                if (this.fileProcessingTimeout) {
+                    clearTimeout(this.fileProcessingTimeout);
+                    this.fileProcessingTimeout = null;
+                }
                 this.logFlow('file_reader_error', { error: e });
                 console.error('FileReader error:', e);
                 alert('Error reading the image file. Please try again.');
@@ -387,6 +425,17 @@ class StoryReader {
             };
             
             this.logFlow('starting_file_read_as_data_url');
+            
+            // Set a timeout to detect if file processing gets stuck
+            this.fileProcessingTimeout = setTimeout(() => {
+                if (this.processingFile) {
+                    this.logFlow('file_processing_timeout_detected');
+                    this.processingFile = false;
+                    alert('File processing timed out. Please try taking another photo.');
+                    this.resetToCamera();
+                }
+            }, 10000); // 10 second timeout
+            
             reader.readAsDataURL(file);
         } else {
             this.logFlow('no_file_selected');
