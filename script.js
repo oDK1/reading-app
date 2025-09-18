@@ -3,6 +3,7 @@ class StoryReader {
         this.initializeElements();
         this.bindEvents();
         this.currentAudio = null;
+        this.processingFile = false;
     }
 
     initializeElements() {
@@ -29,9 +30,8 @@ class StoryReader {
 
     bindEvents() {
         this.cameraBtn.addEventListener('click', () => this.startCamera());
-        // Use both change and input events for better reliability
+        // Use only change event for iPhone Safari compatibility
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-        this.fileInput.addEventListener('input', (e) => this.handleFileSelect(e));
         this.retakeBtn.addEventListener('click', () => this.resetToCamera());
         this.readBtn.addEventListener('click', () => this.processImage());
         this.playBtn.addEventListener('click', () => this.playAudio());
@@ -44,15 +44,20 @@ class StoryReader {
             console.log('Starting camera, isMobile:', this.isMobile());
             console.log('Location protocol:', window.location.protocol);
             
-            // Clear any previous file selection to ensure change event fires
+            // Reset processing flag
+            this.processingFile = false;
+            
+            // For iPhone Safari, be more aggressive about clearing the file input
+            this.fileInput.value = null;
             this.fileInput.value = '';
             
             if (this.isMobile() || !navigator.mediaDevices?.getUserMedia) {
                 // On mobile or if getUserMedia not available, use file input with camera
-                // Add a small delay to ensure the value clearing is processed
+                // Longer delay for iPhone Safari
                 setTimeout(() => {
+                    console.log('Triggering file input click');
                     this.fileInput.click();
-                }, 10);
+                }, 50);
             } else {
                 // On desktop, try to access camera
                 const stream = await navigator.mediaDevices.getUserMedia({ 
@@ -93,10 +98,19 @@ class StoryReader {
         const file = event.target.files[0];
         console.log('File selected:', file ? file.name : 'none', file ? file.size : 0);
         
+        // Prevent duplicate processing (iPhone Safari might fire multiple events)
+        if (this.processingFile) {
+            console.log('Already processing a file, ignoring duplicate event');
+            return;
+        }
+        
         if (file) {
+            this.processingFile = true;
+            
             // Check if it's an image
             if (!file.type.startsWith('image/')) {
                 alert('Please select an image file');
+                this.processingFile = false;
                 return;
             }
             
@@ -104,14 +118,17 @@ class StoryReader {
             reader.onload = (e) => {
                 console.log('File loaded, data URL length:', e.target.result.length);
                 this.displayCapturedImage(e.target.result);
+                this.processingFile = false;
             };
             reader.onerror = (e) => {
                 console.error('FileReader error:', e);
                 alert('Error reading the image file. Please try again.');
+                this.processingFile = false;
             };
             reader.readAsDataURL(file);
         } else {
             console.log('No file selected');
+            this.processingFile = false;
         }
     }
 
@@ -125,19 +142,34 @@ class StoryReader {
             return;
         }
         
-        this.capturedImage.src = dataURL;
-        
         // Show the captured image section immediately
         this.capturedImageSection.style.display = 'block';
         this.cameraBtn.style.display = 'none';
         this.video.style.display = 'none';
         
-        // Wait for image to actually load before processing, especially important on mobile
+        // Set image source and wait for it to load
+        this.capturedImage.src = dataURL;
+        
+        // For iPhone Safari, use a more reliable approach
+        const processImageWhenReady = () => {
+            // Check if image is loaded or if it's a data URL (which loads immediately)
+            if (this.capturedImage.complete || dataURL.startsWith('data:')) {
+                console.log('Image ready, starting processing...');
+                setTimeout(() => {
+                    this.processImage();
+                }, 300); // Longer delay for iPhone Safari
+            } else {
+                // Fallback: wait a bit more and try again
+                setTimeout(processImageWhenReady, 100);
+            }
+        };
+        
+        // Start the processing check
+        processImageWhenReady();
+        
+        // Also set up onload as backup
         this.capturedImage.onload = () => {
-            console.log('Image loaded successfully, starting processing...');
-            setTimeout(() => {
-                this.processImage();
-            }, 200); // Increased delay for mobile reliability
+            console.log('Image onload fired');
         };
         
         this.capturedImage.onerror = () => {
