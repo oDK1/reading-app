@@ -117,6 +117,14 @@ class StoryReader {
 
     displayCapturedImage(dataURL) {
         console.log('Setting captured image src, processing...');
+        
+        // Ensure we have valid image data before proceeding
+        if (!dataURL || !dataURL.includes(',')) {
+            console.error('Invalid image data received');
+            alert('Invalid image data. Please try taking the photo again.');
+            return;
+        }
+        
         this.capturedImage.src = dataURL;
         
         // Show the captured image section immediately
@@ -124,11 +132,19 @@ class StoryReader {
         this.cameraBtn.style.display = 'none';
         this.video.style.display = 'none';
         
-        // Add a small delay to ensure image is loaded, especially on mobile
-        setTimeout(() => {
-            console.log('Starting image processing...');
-            this.processImage();
-        }, 100);
+        // Wait for image to actually load before processing, especially important on mobile
+        this.capturedImage.onload = () => {
+            console.log('Image loaded successfully, starting processing...');
+            setTimeout(() => {
+                this.processImage();
+            }, 200); // Increased delay for mobile reliability
+        };
+        
+        this.capturedImage.onerror = () => {
+            console.error('Failed to load captured image');
+            alert('Failed to load the image. Please try taking another photo.');
+            this.resetToCamera();
+        };
     }
 
     stopCamera() {
@@ -153,8 +169,14 @@ class StoryReader {
         // Clear the file input to ensure new photos are detected
         this.fileInput.value = '';
         
-        // Clear any previous image data
-        this.capturedImage.src = '';
+        // Clear image event handlers to prevent conflicts
+        this.capturedImage.onload = null;
+        this.capturedImage.onerror = null;
+        
+        // Only clear image src after a delay to avoid race conditions
+        setTimeout(() => {
+            this.capturedImage.src = '';
+        }, 100);
         
         console.log('Reset to camera view completed');
     }
@@ -189,9 +211,18 @@ class StoryReader {
     async extractTextFromImage() {
         const imageData = this.capturedImage.src;
         console.log('Image data length:', imageData.length);
+        console.log('Image complete:', this.capturedImage.complete);
+        console.log('Image naturalWidth:', this.capturedImage.naturalWidth);
         
         if (!imageData || !imageData.includes(',')) {
+            console.error('Invalid image data - missing or malformed data URL');
             throw new Error('Invalid image data');
+        }
+        
+        // Additional validation for mobile
+        if (!this.capturedImage.complete || this.capturedImage.naturalWidth === 0) {
+            console.error('Image not fully loaded');
+            throw new Error('Image not fully loaded');
         }
         
         // Remove data URL prefix to get base64 data
