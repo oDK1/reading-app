@@ -237,6 +237,14 @@ class StoryReader {
         this.cameraBtn.addEventListener('click', () => {
             // Debounce rapid clicks to prevent conflicts
             const now = Date.now();
+            this.logFlow('camera_button_clicked_raw', {
+                lastClickTime: this.lastClickTime,
+                currentTime: now,
+                timeSinceLastClick: now - this.lastClickTime,
+                debounceMs: this.clickDebounceMs,
+                willDebounce: (now - this.lastClickTime < this.clickDebounceMs)
+            });
+            
             if (now - this.lastClickTime < this.clickDebounceMs) {
                 this.logFlow('click_debounced', {
                     timeSinceLastClick: now - this.lastClickTime,
@@ -550,7 +558,8 @@ class StoryReader {
         this.video.style.display = 'none';
         this.cameraBtn.style.display = 'block';
         this.cameraBtn.textContent = '📸 Take Photo';
-        this.cameraBtn.onclick = () => this.startCamera();
+        // Remove any existing onclick handler to avoid conflicts with addEventListener
+        this.cameraBtn.onclick = null;
         this.logFlow('ui_reset_completed');
         
         // Clear the file input to ensure new photos are detected
