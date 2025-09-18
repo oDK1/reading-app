@@ -128,6 +128,8 @@ class StoryReader {
         this.cameraBtn.textContent = '📸 Take Photo';
         this.cameraBtn.onclick = () => this.startCamera();
         this.stopAudio();
+        // Clear the file input to ensure new photos are detected
+        this.fileInput.value = '';
     }
 
     async processImage() {
@@ -200,6 +202,11 @@ class StoryReader {
 
     async generateAudio(text) {
         try {
+            // Clean up any previous audio URL before creating a new one
+            if (this.audioPlayer.src && this.audioPlayer.src.startsWith('blob:')) {
+                URL.revokeObjectURL(this.audioPlayer.src);
+            }
+            
             const response = await fetch('/api/generate-audio', {
                 method: 'POST',
                 headers: {
@@ -217,6 +224,7 @@ class StoryReader {
             const audioBlob = await response.blob();
             const audioUrl = URL.createObjectURL(audioBlob);
             this.audioPlayer.src = audioUrl;
+            this.audioPlayer.load(); // Ensure the new audio is properly loaded
         } catch (error) {
             console.error('Audio generation error:', error);
             alert('I can show you the text, but audio isn\'t working right now. Please try again later!');
@@ -278,6 +286,12 @@ class StoryReader {
         if (this.audioPlayer) {
             this.audioPlayer.pause();
             this.audioPlayer.currentTime = 0;
+            // Clean up the previous audio URL to prevent memory leaks and loading issues
+            if (this.audioPlayer.src && this.audioPlayer.src.startsWith('blob:')) {
+                URL.revokeObjectURL(this.audioPlayer.src);
+            }
+            this.audioPlayer.src = '';
+            this.audioPlayer.load(); // Reset the audio element completely
             this.playBtn.style.display = 'inline-block';
             this.pauseBtn.style.display = 'none';
         }
