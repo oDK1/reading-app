@@ -106,6 +106,14 @@ app.post('/api/generate-audio', async (req, res) => {
         // Using a child-friendly voice ID (you may need to adjust this)
         const voiceId = process.env.ELEVENLABS_VOICE_ID || 'pNInz6obpgDQGcFmaJgB'; // Default to Adam voice
 
+        console.log('ElevenLabs Request:', {
+            voiceId: voiceId,
+            textLength: text.length,
+            textPreview: text.substring(0, 100) + '...',
+            apiKeyExists: !!elevenLabsApiKey,
+            apiKeyPrefix: elevenLabsApiKey ? elevenLabsApiKey.substring(0, 8) + '...' : 'none'
+        });
+
         const response = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`, {
             method: 'POST',
             headers: {
@@ -126,7 +134,29 @@ app.post('/api/generate-audio', async (req, res) => {
         });
 
         if (!response.ok) {
-            throw new Error(`ElevenLabs API error: ${response.status}`);
+            // Get the actual error message from ElevenLabs
+            let elevenLabsError = 'Unknown ElevenLabs error';
+            try {
+                const errorBody = await response.text();
+                elevenLabsError = errorBody;
+                console.error('ElevenLabs API Error Details:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    body: errorBody
+                });
+            } catch (parseError) {
+                console.error('Failed to parse ElevenLabs error:', parseError);
+            }
+            
+            return res.status(500).json({ 
+                error: 'ElevenLabs API failed',
+                details: {
+                    status: response.status,
+                    statusText: response.statusText,
+                    elevenLabsError: elevenLabsError
+                }
+            });
         }
 
         const audioBuffer = await response.buffer();
@@ -136,7 +166,16 @@ app.post('/api/generate-audio', async (req, res) => {
         res.send(audioBuffer);
     } catch (error) {
         console.error('Audio generation error:', error);
-        res.status(500).json({ error: 'Failed to generate audio' });
+        
+        // Return more detailed error information
+        res.status(500).json({ 
+            error: 'Failed to generate audio',
+            details: {
+                message: error.message,
+                stack: error.stack,
+                type: error.constructor.name
+            }
+        });
     }
 });
 
