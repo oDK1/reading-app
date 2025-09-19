@@ -16,6 +16,9 @@ class StoryReader {
         this.lastClickTime = 0;
         this.clickDebounceMs = 1000; // 1 second debounce
         
+        // Performance tracking
+        this.performanceTimers = {};
+        
         this.logFlow('App initialized');
     }
 
@@ -315,9 +318,13 @@ class StoryReader {
                     }
                 }, 50);
             } else {
-                // On desktop, try to access camera
+                // On desktop, try to access camera with lower resolution for faster processing
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },  // Lower resolution for faster processing
+                        height: { ideal: 720 }
+                    } 
                 });
                 this.video.srcObject = stream;
                 this.video.style.display = 'block';
@@ -341,11 +348,34 @@ class StoryReader {
 
     capturePhoto() {
         const context = this.canvas.getContext('2d');
-        this.canvas.width = this.video.videoWidth;
-        this.canvas.height = this.video.videoHeight;
-        context.drawImage(this.video, 0, 0);
         
-        const dataURL = this.canvas.toDataURL('image/jpeg');
+        // Optimize canvas size for faster processing
+        const maxWidth = 1600;  // Max width for good text recognition but fast processing
+        const maxHeight = 1200; // Max height
+        
+        let { videoWidth, videoHeight } = this.video;
+        
+        // Scale down if needed while maintaining aspect ratio
+        if (videoWidth > maxWidth || videoHeight > maxHeight) {
+            const ratio = Math.min(maxWidth / videoWidth, maxHeight / videoHeight);
+            videoWidth *= ratio;
+            videoHeight *= ratio;
+        }
+        
+        this.canvas.width = videoWidth;
+        this.canvas.height = videoHeight;
+        context.drawImage(this.video, 0, 0, videoWidth, videoHeight);
+        
+        // Use lower quality JPEG for faster processing
+        const dataURL = this.canvas.toDataURL('image/jpeg', 0.8); // 80% quality
+        
+        this.logFlow('desktop_photo_captured', {
+            originalDimensions: `${this.video.videoWidth}x${this.video.videoHeight}`,
+            optimizedDimensions: `${videoWidth}x${videoHeight}`,
+            quality: '80%',
+            estimatedSizeMB: (dataURL.length / 1024 / 1024).toFixed(2)
+        });
+        
         this.displayCapturedImage(dataURL);
         this.stopCamera();
     }
@@ -589,6 +619,9 @@ class StoryReader {
     }
 
     async processImage() {
+        // Start performance timer
+        this.performanceTimers.totalProcessing = performance.now();
+        
         this.logFlow('process_image_called', {
             capturedImageSrc: this.capturedImage.src ? this.capturedImage.src.substring(0, 50) + '...' : 'none',
             imageComplete: this.capturedImage.complete,
@@ -632,11 +665,22 @@ class StoryReader {
             this.resetToCamera();
         } finally {
             this.hideLoading();
+            
+            // Calculate total processing time
+            const totalTime = performance.now() - this.performanceTimers.totalProcessing;
+            this.logFlow('processing_performance_summary', {
+                totalProcessingTimeMs: totalTime.toFixed(2),
+                totalProcessingTimeSec: (totalTime / 1000).toFixed(2),
+                imageOptimizationUsed: this.performanceTimers.compressionUsed || false
+            });
+            
             this.logFlow('loading_hidden');
         }
     }
 
     async extractTextFromImage() {
+        this.performanceTimers.textExtraction = performance.now();
+        
         const imageData = this.capturedImage.src;
         this.logFlow('extract_text_from_image_called', {
             originalImageLength: imageData.length,
@@ -656,24 +700,44 @@ class StoryReader {
             throw new Error('Image not fully loaded');
         }
         
-        // Check if image needs compression (mobile photos are often too large)
+        // Check if image needs compression (with lower threshold for faster processing)
         let processedImageData = imageData;
         const imageSizeMB = imageData.length / 1024 / 1024;
         
         this.logFlow('checking_image_size', {
             imageSizeMB: imageSizeMB.toFixed(2),
-            needsCompression: imageSizeMB > 3
+            needsCompression: imageSizeMB > 2, // Lowered threshold
+            strategy: 'fast_processing_optimized'
         });
         
-        if (imageSizeMB > 3) { // If larger than 3MB, compress it
-            this.logFlow('compressing_large_image');
-            processedImageData = await this.compressImage(imageData, 0.7); // 70% quality
+        if (imageSizeMB > 2) { // Lowered from 3MB to 2MB for faster processing
+            this.performanceTimers.compression = performance.now();
+            this.performanceTimers.compressionUsed = true;
+            
+            this.logFlow('compressing_large_image', {
+                reason: 'size_optimization_for_speed'
+            });
+            
+            // More aggressive compression for speed
+            processedImageData = await this.compressImage(imageData, 0.6, 1400, 1400);
+            
+            const compressionTime = performance.now() - this.performanceTimers.compression;
+            this.logFlow('compression_performance', {
+                compressionTimeMs: compressionTime.toFixed(2),
+                compressionTimeSec: (compressionTime / 1000).toFixed(2)
+            });
             
             const compressedSizeMB = processedImageData.length / 1024 / 1024;
             this.logFlow('image_compressed', {
                 originalSizeMB: imageSizeMB.toFixed(2),
                 compressedSizeMB: compressedSizeMB.toFixed(2),
-                compressionRatio: (compressedSizeMB / imageSizeMB * 100).toFixed(1) + '%'
+                compressionRatio: (compressedSizeMB / imageSizeMB * 100).toFixed(1) + '%',
+                speedOptimized: true
+            });
+        } else {
+            this.logFlow('image_size_acceptable_for_fast_processing', {
+                imageSizeMB: imageSizeMB.toFixed(2),
+                skippingCompression: true
             });
         }
         
@@ -704,8 +768,12 @@ class StoryReader {
 
         const result = await response.json();
         console.log('API result:', result);
+        const textExtractionTime = performance.now() - this.performanceTimers.textExtraction;
+        
         this.logFlow('text_extraction_api_success', {
-            extractedTextLength: result.text ? result.text.length : 0
+            extractedTextLength: result.text ? result.text.length : 0,
+            textExtractionTimeMs: textExtractionTime.toFixed(2),
+            textExtractionTimeSec: (textExtractionTime / 1000).toFixed(2)
         });
         
         return result.text;
